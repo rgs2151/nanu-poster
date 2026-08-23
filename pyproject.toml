@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nanu-poster"
+version = "0.1.0"
+description = "Quantitative analysis of enzymatically switched motor-protein transport on dynamic DNA tracks."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "h5py",
+  "joblib",
+  "matplotlib>=3.8",
+  "numpy",
+  "pandas",
+  "scikit-image",
+  "scikit-learn",
+  "scipy",
+  "seaborn",
+  "tqdm",
+  "tifffile",
+]
+
+[project.optional-dependencies]
+notebook = [
+  "ipykernel",
+  "jupyterlab",
+]
+
+[tool.setuptools.packages.find]
+include = ["nanu_poster*"]
