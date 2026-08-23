@@ -248,7 +248,7 @@ def plot_rail_fraction(cache):
         ax.set_box_aspect(1)
         sns.despine(ax=ax, trim=True, offset=10)
 
-    axes[0].set_ylabel("Motor-positive rail fraction (%)")
+    axes[0].set_ylabel("Rail fraction (%)")
     fig.subplots_adjust(wspace=0.32)
     fig.savefig(OUTPUT_PATH, bbox_inches="tight", facecolor="white", transparent=False)
     plt.close(fig)

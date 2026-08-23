@@ -21,7 +21,7 @@ from rail_fraction import (
 
 
 UNIT_DIR = Path(__file__).resolve().parent
-OUTPUT_PATH = UNIT_DIR / "plots" / "rail_fraction_diagnostic.pdf"
+OUTPUT_PATH = UNIT_DIR / "plots" / "rail_fraction_composite.pdf"
 EARLY_TIME_MINUTES = 2.5
 LATE_WINDOW_OFFSET_MINUTES = 2.5
 MINIMUM_CIRCLE_AREA = 4
@@ -59,15 +59,7 @@ def add_positive_overlay(ax, positive_mask, color):
         )
 
 
-def plot_motor_audit(
-    ax,
-    motor_frame,
-    rail_mask,
-    threshold,
-    color,
-    title,
-    limits,
-):
+def plot_motor_frame(ax, motor_frame, rail_mask, threshold, color, label, limits):
     positive_mask = rail_mask & (motor_frame > threshold)
     fraction = 100.0 * np.count_nonzero(positive_mask) / np.count_nonzero(rail_mask)
     ax.imshow(
@@ -78,13 +70,39 @@ def plot_motor_audit(
         interpolation="none",
     )
     add_positive_overlay(ax, positive_mask, color)
-    ax.set_title(f"{title}\n{fraction:.1f}% positive", fontsize=9)
+    ax.set_title(f"{label}\n{fraction:.0f}% positive", fontsize=9)
     ax.set_axis_off()
 
 
-def plot_diagnostic(source_cache, cache):
+def plot_time_course(ax, time_min, raw_fraction, smoothed_fraction, color):
+    ax.plot(
+        time_min,
+        raw_fraction,
+        color=color,
+        alpha=0.22,
+        linewidth=0.6,
+    )
+    ax.plot(
+        time_min,
+        smoothed_fraction,
+        color=color,
+        linewidth=1.4,
+    )
+    xmax = float(time_min[-1])
+    ax.set_xlim(0, xmax)
+    ax.set_xticks([0, xmax])
+    ax.set_ylim(-2.5, 52.5)
+    ax.set_yticks([0, 50])
+    ax.set_xlabel("Time (min)", fontsize=9)
+    ax.set_ylabel("Rail fraction (%)", fontsize=9)
+    ax.tick_params(labelsize=8)
+    ax.set_box_aspect(1)
+    sns.despine(ax=ax, trim=True, offset=7)
+
+
+def plot_composite(source_cache, cache):
     setup_style()
-    fig, axes = plt.subplots(2, 4, figsize=(11.0, 6.8))
+    fig, axes = plt.subplots(2, 4, figsize=(10.5, 6.6))
     panels = [
         ("off_to_on", "OFF-to-ON", OFF_TO_ON_PATH),
         ("on_to_off", "ON-to-OFF", ON_TO_OFF_PATH),
@@ -96,7 +114,6 @@ def plot_diagnostic(source_cache, cache):
         rail_mask = source_cache[f"{recording}_rail_mask"].astype(bool)
         time_min = cache[f"{recording}_time_min"]
         threshold = float(cache[f"{recording}_motor_positive_threshold"])
-        baseline_median = float(cache[f"{recording}_baseline_off_rail_median"])
         early_index = int(np.argmin(np.abs(time_min - EARLY_TIME_MINUTES)))
         late_index = int(
             np.argmin(
@@ -131,75 +148,42 @@ def plot_diagnostic(source_cache, cache):
             colors=[color],
             linewidths=0.7,
         )
-        rail_ax.set_title(f"{title}\nReused rail region", fontsize=9)
+        rail_ax.set_title(title, fontsize=10)
         rail_ax.set_axis_off()
 
-        histogram_ax = axes[row, 1]
-        edges = cache[f"{recording}_baseline_histogram_edges"]
-        density = cache[f"{recording}_baseline_histogram_density"]
-        centres = (edges[:-1] + edges[1:]) / 2.0
-        histogram_ax.fill_between(
-            centres,
-            density,
-            color=color,
-            alpha=0.25,
-            linewidth=0,
-        )
-        histogram_ax.plot(centres, density, color=color, linewidth=1)
-        histogram_ax.axvline(
-            baseline_median,
-            color="0.55",
-            linestyle="--",
-            linewidth=1,
-        )
-        histogram_ax.axvline(threshold, color="black", linewidth=1.4)
-        histogram_ax.set_xlim(float(edges[0]), float(edges[-1]))
-        histogram_ax.set_xticks([float(edges[0]), float(edges[-1])])
-        histogram_ax.set_yticks([])
-        if row == 1:
-            histogram_ax.set_xlabel("Motor intensity", fontsize=9)
-        histogram_ax.set_title(
-            f"Baseline off rail\nthreshold = {threshold:,.0f}",
-            fontsize=9,
-        )
-        histogram_ax.tick_params(axis="x", labelsize=8)
-        histogram_ax.set_box_aspect(1)
-        sns.despine(ax=histogram_ax, left=True, trim=True, offset=6)
-
-        plot_motor_audit(
-            axes[row, 2],
+        plot_motor_frame(
+            axes[row, 1],
             early_motor,
             rail_mask,
             threshold,
             color,
-            f"Early · {time_min[early_index]:.2f} min",
+            "Early",
             motor_limits,
         )
-        plot_motor_audit(
-            axes[row, 3],
+        plot_motor_frame(
+            axes[row, 2],
             late_motor,
             rail_mask,
             threshold,
             color,
-            f"Late · {time_min[late_index]:.2f} min",
+            "Late",
             motor_limits,
         )
+        plot_time_course(
+            axes[row, 3],
+            time_min,
+            cache[f"{recording}_fraction_percent"],
+            cache[f"{recording}_fraction_smoothed"],
+            color,
+        )
 
-    fig.text(
-        0.50,
-        0.025,
-        "Colored pixels are the exact numerator; black circles mark the largest contiguous hit regions.",
-        ha="center",
-        va="bottom",
-        fontsize=8,
-    )
     fig.subplots_adjust(
-        left=0.03,
+        left=0.025,
         right=0.99,
-        bottom=0.15,
-        top=0.95,
-        wspace=0.30,
-        hspace=0.52,
+        bottom=0.09,
+        top=0.96,
+        wspace=0.38,
+        hspace=0.38,
     )
     fig.savefig(OUTPUT_PATH, bbox_inches="tight", facecolor="white", transparent=False)
     plt.close(fig)
@@ -209,4 +193,4 @@ if __name__ == "__main__":
     if not CACHE_PATH.exists():
         build_cache()
     with np.load(SOURCE_CACHE_PATH) as source_cache, np.load(CACHE_PATH) as cache:
-        plot_diagnostic(source_cache, cache)
+        plot_composite(source_cache, cache)
