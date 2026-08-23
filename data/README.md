@@ -12,10 +12,10 @@ The large image files stay local and are ignored by git. Do not rename, move, ov
 - Each recording contains a motor-protein view and a DNA-rail view of the same scene.
 - `on_to_off.tif` stores both views side by side: columns 0–255 are motor proteins and columns 256–511 are DNA rails.
 - `off_to_on.tif` stores two channels: channel 0 is DNA rails and channel 1 is motor proteins. Its first `ZCYX` dimension is treated as ordered timepoints because each `WalkAvg` label occurs once per channel.
-- Spatial registration between the motor and rail views remains to be verified before measurement.
+- Direct pixelwise alignment between paired motor and rail views was accepted from the segmentation overlay diagnostic. Quantitative units use one fixed DNA-derived rail region per recording with an expansion margin for minor residual registration offsets; they do not realign frames to maximize motor overlap.
 - `on_to_off.tif` contains a per-frame `ElapsedTime-ms` value. Subtract the first value to place its first stored frame at time zero; do not use the nominal 1 ms interval stored in the acquisition settings.
 - `off_to_on.tif` contains no physical frame interval. Assign its first timepoint to zero and assume 2.188 seconds per timepoint, the median consecutive-frame interval measured in `on_to_off.tif`.
-- The DNA-rail view will define the rail mask. That registered mask will then be applied to the motor-protein view; the motor channel must not be used to define the rail mask.
+- The DNA-rail view defines the rail region, including its fixed expansion margin. That region is then applied to the paired motor-protein view; the motor channel must not define or move it.
 - There is one recording per transition. Frames, pixels, rail segments, and tracked runs are repeated observations within a recording, not independent experimental replicates.
 - No missing frames, exclusions, or invalid time ranges have been declared yet.
 

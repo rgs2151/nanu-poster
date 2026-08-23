@@ -17,8 +17,8 @@ SMOOTHING_SIGMA = 1.0
 BACKGROUND_SIGMA = 12.0
 MINIMUM_OBJECT_SIZE = 12
 MASK_EXPANSION_RADIUS = 2
-BACKGROUND_INNER_RADIUS = 4
-BACKGROUND_OUTER_RADIUS = 10
+OFF_RAIL_INNER_RADIUS = 4
+OFF_RAIL_OUTER_RADIUS = 10
 
 with tifffile.TiffFile(DATA_PATH) as tif:
     series = tif.series[0]
@@ -70,20 +70,20 @@ rail_mask = morphology.dilation(
     morphology.disk(MASK_EXPANSION_RADIUS),
 )
 
-background_inner = morphology.dilation(
+off_rail_inner = morphology.dilation(
     rail_mask,
-    morphology.disk(BACKGROUND_INNER_RADIUS),
+    morphology.disk(OFF_RAIL_INNER_RADIUS),
 )
-background_outer = morphology.dilation(
+off_rail_outer = morphology.dilation(
     rail_mask,
-    morphology.disk(BACKGROUND_OUTER_RADIUS),
+    morphology.disk(OFF_RAIL_OUTER_RADIUS),
 )
-background_band = background_outer & ~background_inner
+off_rail_mask = off_rail_outer & ~off_rail_inner
 
 motor_values_on_rails = motor_frame[rail_mask].astype(float)
-motor_values_background = motor_frame[background_band].astype(float)
-local_background = float(np.median(motor_values_background))
-on_rail_excess = float(np.mean(motor_values_on_rails) - local_background)
+motor_values_off_rail = motor_frame[off_rail_mask].astype(float)
+off_rail_median = float(np.median(motor_values_off_rail))
+on_rail_excess = float(np.mean(motor_values_on_rails) - off_rail_median)
 detector_maximum = np.iinfo(motor_frame.dtype).max
 rail_saturated_fraction = float(
     np.mean(motor_values_on_rails == detector_maximum)
@@ -143,12 +143,12 @@ axes[0, 3].imshow(
 )
 axes[0, 3].contour(rail_mask, levels=[0.5], colors="darkred", linewidths=0.8)
 axes[0, 3].contour(
-    background_band,
+    off_rail_mask,
     levels=[0.5],
     colors="midnightblue",
     linewidths=0.6,
 )
-axes[0, 3].set_title("Rail and local background")
+axes[0, 3].set_title("Rail and off rail")
 
 axes[1, 0].imshow(
     motor_frame,
@@ -176,18 +176,18 @@ axes[1, 2].imshow(
 axes[1, 2].set_title("Motor signal on rails")
 
 combined_values = np.concatenate(
-    [motor_values_on_rails, motor_values_background]
+    [motor_values_on_rails, motor_values_off_rail]
 )
 histogram_limits = np.percentile(combined_values, [0.5, 99.5])
 histogram_bins = np.linspace(histogram_limits[0], histogram_limits[1], 45)
 axes[1, 3].hist(
-    motor_values_background,
+    motor_values_off_rail,
     bins=histogram_bins,
     density=True,
     histtype="step",
     color="midnightblue",
     linewidth=1.2,
-    label="Local background",
+    label="Off rail",
 )
 axes[1, 3].hist(
     motor_values_on_rails,
@@ -198,7 +198,7 @@ axes[1, 3].hist(
     linewidth=1.2,
     label="Rail region",
 )
-axes[1, 3].axvline(local_background, color="midnightblue", linestyle="--")
+axes[1, 3].axvline(off_rail_median, color="midnightblue", linestyle="--")
 axes[1, 3].axvline(
     np.mean(motor_values_on_rails),
     color="darkred",
@@ -215,7 +215,7 @@ axes[1, 3].legend(loc="upper right", fontsize=7)
 axes[1, 3].text(
     0.98,
     0.68,
-    f"On-rail excess = {on_rail_excess:.0f} a.u.",
+    f"Rail-minus-off-rail = {on_rail_excess:.0f} a.u.",
     transform=axes[1, 3].transAxes,
     ha="right",
     va="top",
