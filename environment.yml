@@ -4,6 +4,7 @@ channels:
 dependencies:
   - python=3.11
   - h5py
+  - imageio-ffmpeg
   - ipykernel
   - joblib
   - jupyterlab

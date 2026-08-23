@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "h5py",
+  "imageio-ffmpeg",
   "joblib",
   "matplotlib>=3.8",
   "numpy",

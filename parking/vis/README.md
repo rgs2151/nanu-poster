@@ -49,6 +49,115 @@
 
 - `data/README.md` for the source-data inventory and recording constraints.
 
+# on_to_off_video
+
+## Method
+
+- Load `data/on_to_off.tif` without changing the source file.
+- Select 240 source frames evenly from the first through the last stored frame so that the full recording is represented.
+- Split every selected frame at the centre column. Display the motor-protein view on the left and the DNA-rail view on the right.
+- Read the elapsed time stored with each selected frame and subtract the first selected timestamp so that the video begins at zero.
+- Hold the grayscale display limits fixed through the video. Calculate separate motor and rail limits from the 1st and 99.8th intensity percentiles across all selected frames.
+- Encode the 240 selected frames at 12 frames per second, producing a 20-second MP4 without interpolating intermediate frames.
+- Write `plots/on_to_off.mp4`.
+
+## Variables
+
+- Data/input: `data/on_to_off.tif`, a 16-bit 512 x 512 time series with 2,000 stored frames.
+- Selected observations: 240 evenly spaced zero-based frame indices including the first and last frames.
+- Panel mapping: columns 0–255 are motor proteins; columns 256–511 are DNA rails.
+- Clock: actual per-frame `ElapsedTime-ms` metadata relative to the first selected frame, displayed as hours:minutes:seconds.
+- Display limits: fixed 1st and 99.8th intensity percentiles calculated separately for motor and rail pixels across the selected frames.
+- Playback: 12 output frames per second for 20 seconds.
+- Output: `parking/vis/plots/on_to_off.mp4`.
+
+## Statistics
+
+- None; this output is descriptive.
+- No null hypothesis, alternative hypothesis, statistical threshold, model, or test is used.
+- Percentiles control display contrast only and are not detection thresholds.
+
+## Legends
+
+- X axis: image x-coordinate in pixels; tick labels are hidden.
+- Y axis: image y-coordinate in pixels; tick labels are hidden.
+- Color/value: black indicates lower raw fluorescence intensity and white indicates higher raw fluorescence intensity within each channel's fixed display range.
+- Grouping: paired motor-protein and DNA-rail views from the same selected source frame.
+- Ordering/sorting: selected frames remain in acquisition order from the beginning to the end of the recording.
+- Lines/markers/labels: the bottom clock shows actual elapsed acquisition time; no lines or markers are drawn.
+- Panels: motor proteins on the left; DNA rails on the right.
+
+## Interpretation
+
+- Use the video to inspect the entire ON-to-OFF recording rapidly while preserving its chronological order and actual elapsed-time labels.
+- Because contrast is fixed within each channel, changes in displayed brightness over time are not caused by frame-by-frame rescaling.
+- This accelerated overview does not itself quantify motor fluorescence, rail occupancy, or directed runs.
+
+## Notes
+
+- The 20-second playback is a heavily subsampled overview of approximately 76 minutes of acquisition time.
+- Playback speed is not the experimental frame rate; the bottom clock reports experimental time.
+
+## References
+
+- `data/README.md` for source-data layout and timing metadata.
+- `nanu_poster/dual_channel_display.py` for the shared two-panel display and clock formatting.
+
+# off_to_on_video
+
+## Method
+
+- Load `data/off_to_on.tif` without changing the source file and verify its two-channel `ZCYX` layout.
+- Treat the first stack dimension as ordered timepoints and select 240 timepoints evenly from the first through the last stored timepoint.
+- Read channel 1 as motor proteins and channel 0 as DNA rails. Display motor proteins on the left and DNA rails on the right.
+- Assign elapsed time as `timepoint index x 2.188 seconds`, following the project time-axis decision for this TIFF.
+- Hold the grayscale display limits fixed through the video. Calculate separate motor and rail limits from the 1st and 99.8th intensity percentiles across all selected timepoints.
+- Encode the 240 selected timepoints at 12 frames per second, producing a 20-second MP4 without interpolating intermediate frames.
+- Write `plots/off_to_on.mp4`.
+
+## Variables
+
+- Data/input: `data/off_to_on.tif`, a 16-bit stack with 2,089 ordered timepoints, two channels, 392 rows, and 256 columns.
+- Selected observations: 240 evenly spaced zero-based timepoint indices including the first and last timepoints.
+- Panel mapping: channel 1 is motor proteins; channel 0 is DNA rails.
+- Clock: zero-based timepoint index multiplied by the assumed 2.188-second interval, displayed as hours:minutes:seconds.
+- Display limits: fixed 1st and 99.8th intensity percentiles calculated separately for motor and rail pixels across the selected timepoints.
+- Playback: 12 output frames per second for 20 seconds.
+- Output: `parking/vis/plots/off_to_on.mp4`.
+
+## Statistics
+
+- None; this output is descriptive.
+- No null hypothesis, alternative hypothesis, statistical threshold, model, or test is used.
+- Percentiles control display contrast only and are not detection thresholds.
+
+## Legends
+
+- X axis: image x-coordinate in pixels; tick labels are hidden.
+- Y axis: image y-coordinate in pixels; tick labels are hidden.
+- Color/value: black indicates lower raw fluorescence intensity and white indicates higher raw fluorescence intensity within each channel's fixed display range.
+- Grouping: paired motor-protein and DNA-rail channels from the same selected source timepoint.
+- Ordering/sorting: selected timepoints remain in stack order from the beginning to the end of the recording.
+- Lines/markers/labels: the bottom clock shows assumed elapsed acquisition time; no lines or markers are drawn.
+- Panels: motor proteins on the left; DNA rails on the right.
+
+## Interpretation
+
+- Use the video to inspect the entire OFF-to-ON recording rapidly while preserving its chronological order.
+- Because contrast is fixed within each channel, changes in displayed brightness over time are not caused by frame-by-frame rescaling.
+- This accelerated overview does not itself quantify motor fluorescence, rail occupancy, or directed runs.
+
+## Notes
+
+- The 20-second playback is a heavily subsampled overview of an assumed 76.14 minutes of acquisition time.
+- The clock is inferred rather than measured because this TIFF contains no physical timing metadata.
+- Playback speed is not the experimental frame rate; the bottom clock reports the assumed experimental time.
+
+## References
+
+- `data/README.md` and `DECISIONS.md` for the assumed time calibration.
+- `nanu_poster/dual_channel_display.py` for the shared two-panel display and clock formatting.
+
 # timing_consistency
 
 ## Method

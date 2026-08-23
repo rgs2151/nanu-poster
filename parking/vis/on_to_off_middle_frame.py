@@ -1,8 +1,9 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 import tifffile
+
+from nanu_poster import create_dual_channel_figure, display_limits
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,32 +18,12 @@ split_column = frame.shape[1] // 2
 motor_view = frame[:, :split_column]
 rail_view = frame[:, split_column:]
 
-plt.rcParams["font.family"] = "serif"
-plt.rcParams["mathtext.fontset"] = "cm"
-plt.rcParams["image.interpolation"] = "none"
-plt.rcParams["figure.dpi"] = 300
-plt.rcParams["savefig.dpi"] = 300
-plt.rcParams["savefig.facecolor"] = "white"
-plt.rcParams["savefig.transparent"] = False
-
-fig, axes = plt.subplots(1, 2, figsize=(5.2, 5.0))
-for ax, image, title in zip(
-    axes,
-    [motor_view, rail_view],
-    ["Motor proteins", "DNA rails"],
-):
-    display_min, display_max = np.percentile(image, [1.0, 99.8])
-    ax.imshow(
-        image,
-        cmap="gray",
-        vmin=display_min,
-        vmax=display_max,
-        interpolation="none",
-    )
-    ax.set_title(title, fontsize=11)
-    ax.set_axis_off()
-
-fig.suptitle(f"ON to OFF: middle frame {frame_index}", fontsize=12, y=0.99)
-fig.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.85, wspace=0.08)
+fig, _, _ = create_dual_channel_figure(
+    motor_view,
+    rail_view,
+    display_limits(motor_view),
+    display_limits(rail_view),
+    "ON to OFF",
+)
 fig.savefig(OUTPUT_PATH, bbox_inches="tight", facecolor="white", transparent=False)
 plt.close(fig)
