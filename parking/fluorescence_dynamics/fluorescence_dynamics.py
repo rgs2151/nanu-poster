@@ -1,10 +1,13 @@
+import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import tifffile
-from skimage import filters, morphology
+from joblib import Parallel, delayed
+from scipy import sparse
+from skimage import filters, measure, morphology, segmentation
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -12,6 +15,8 @@ UNIT_DIR = Path(__file__).resolve().parent
 ON_TO_OFF_PATH = ROOT / "data" / "on_to_off.tif"
 OFF_TO_ON_PATH = ROOT / "data" / "off_to_on.tif"
 CACHE_PATH = UNIT_DIR / "cache" / "fluorescence_dynamics.npz"
+COMPONENT_CACHE_PATH = UNIT_DIR / "cache" / "fluorescence_components.npz"
+BOOTSTRAP_CACHE_PATH = UNIT_DIR / "cache" / "fluorescence_bootstrap.npz"
 OUTPUT_PATH = UNIT_DIR / "plots" / "fluorescence_dynamics.pdf"
 
 REFERENCE_TIMEPOINTS = 101
@@ -24,6 +29,12 @@ OFF_RAIL_OUTER_RADIUS = 10
 BASELINE_MINUTES = 5.0
 OFF_TO_ON_FRAME_INTERVAL_SECONDS = 2.188
 ROLLING_WINDOW_SECONDS = 30.0
+BOOTSTRAP_SAMPLES = 1_000
+BOOTSTRAP_SEED = 2_151
+CONFIDENCE_LEVEL = 0.95
+CLUSTER_FORMING_Z = 1.96
+TRIPLE_STAR_P = 0.001
+PARALLEL_WORKERS = os.cpu_count() or 1
 
 COLORS = {
     "off_to_on_rail": "#991B1B",
@@ -243,6 +254,303 @@ def build_cache():
     np.savez_compressed(CACHE_PATH, **cache)
 
 
+def component_geometry(rail_mask, off_rail_mask):
+    rail_labels = measure.label(rail_mask, connectivity=2)
+    off_rail_labels = segmentation.expand_labels(
+        rail_labels,
+        distance=OFF_RAIL_OUTER_RADIUS,
+    )
+    off_rail_labels = np.where(off_rail_mask, off_rail_labels, 0)
+
+    components = int(rail_labels.max())
+    rail_counts = np.bincount(
+        rail_labels.ravel(),
+        minlength=components + 1,
+    )[1:]
+    off_rail_counts = np.bincount(
+        off_rail_labels.ravel(),
+        minlength=components + 1,
+    )[1:]
+    if np.any(rail_counts == 0) or np.any(off_rail_counts == 0):
+        raise ValueError("Every rail component must have rail and off-rail pixels")
+    return rail_labels, off_rail_labels, rail_counts, off_rail_counts
+
+
+def component_membership(labels, components):
+    pixel_indices = np.flatnonzero(labels.ravel())
+    component_indices = labels.ravel()[pixel_indices] - 1
+    return sparse.csr_matrix(
+        (
+            np.ones(len(pixel_indices), dtype=float),
+            (component_indices, pixel_indices),
+        ),
+        shape=(components, labels.size),
+    )
+
+
+def measure_component_chunk(
+    recording,
+    start,
+    stop,
+    combined_membership,
+):
+    data_path = ON_TO_OFF_PATH if recording == "on_to_off" else OFF_TO_ON_PATH
+    with tifffile.TiffFile(data_path) as tif:
+        if recording == "on_to_off":
+            motor_frames = np.stack(
+                [tif.pages[index].asarray()[:, :256] for index in range(start, stop)]
+            )
+        else:
+            motor_frames = np.stack(
+                [
+                    tif.pages[index * 2 + 1].asarray()
+                    for index in range(start, stop)
+                ]
+            )
+    component_sums = (combined_membership @ motor_frames.reshape(stop - start, -1).T).T
+    return start, component_sums
+
+
+def measure_component_time_courses(recording, rail_labels, off_rail_labels):
+    components = int(rail_labels.max())
+    timepoints = 2_000 if recording == "on_to_off" else 2_089
+    combined_membership = sparse.vstack(
+        [
+            component_membership(rail_labels, components),
+            component_membership(off_rail_labels, components),
+        ],
+        format="csr",
+    )
+    edges = np.linspace(
+        0,
+        timepoints,
+        PARALLEL_WORKERS + 1,
+        dtype=int,
+    )
+    chunks = Parallel(
+        n_jobs=PARALLEL_WORKERS,
+        prefer="threads",
+        require="sharedmem",
+    )(
+        delayed(measure_component_chunk)(
+            recording,
+            int(start),
+            int(stop),
+            combined_membership,
+        )
+        for start, stop in zip(edges[:-1], edges[1:])
+        if stop > start
+    )
+    chunks.sort(key=lambda chunk: chunk[0])
+    component_sums = np.concatenate([chunk[1] for chunk in chunks], axis=0)
+    rail_sums = component_sums[:, :components]
+    off_rail_sums = component_sums[:, components:]
+    return rail_sums, off_rail_sums
+
+
+def centered_rolling_mean_matrix(time_min, values):
+    half_window_min = ROLLING_WINDOW_SECONDS / 120.0
+    left = np.searchsorted(time_min, time_min - half_window_min, side="left")
+    right = np.searchsorted(time_min, time_min + half_window_min, side="right")
+    cumulative = np.pad(
+        np.cumsum(values, axis=1, dtype=float),
+        ((0, 0), (1, 0)),
+    )
+    return (cumulative[:, right] - cumulative[:, left]) / (right - left)
+
+
+def cluster_mass_test(observed_difference, bootstrap_difference, difference_se):
+    bootstrap_null = (
+        bootstrap_difference - observed_difference[None, :]
+    ) / difference_se[None, :]
+    observed_standardized = observed_difference / difference_se
+
+    bootstrap_max_cluster_mass = np.zeros(BOOTSTRAP_SAMPLES, dtype=float)
+    for bootstrap_index, null_trace in enumerate(bootstrap_null):
+        masses = [
+            np.abs(null_trace[start : stop + 1]).sum()
+            for start, stop in significant_runs(
+                np.abs(null_trace) >= CLUSTER_FORMING_Z
+            )
+        ]
+        bootstrap_max_cluster_mass[bootstrap_index] = max(masses, default=0.0)
+
+    cluster_p = np.ones(len(observed_difference), dtype=float)
+    cluster_starts = []
+    cluster_stops = []
+    cluster_p_values = []
+    for start, stop in significant_runs(
+        np.abs(observed_standardized) >= CLUSTER_FORMING_Z
+    ):
+        observed_mass = np.abs(observed_standardized[start : stop + 1]).sum()
+        p_value = (
+            1 + np.sum(bootstrap_max_cluster_mass >= observed_mass)
+        ) / (BOOTSTRAP_SAMPLES + 1)
+        cluster_p[start : stop + 1] = p_value
+        cluster_starts.append(start)
+        cluster_stops.append(stop)
+        cluster_p_values.append(p_value)
+
+    return {
+        "observed_standardized_difference": observed_standardized,
+        "bootstrap_max_cluster_mass": bootstrap_max_cluster_mass,
+        "cluster_p": cluster_p,
+        "cluster_start_index": np.asarray(cluster_starts, dtype=int),
+        "cluster_stop_index": np.asarray(cluster_stops, dtype=int),
+        "cluster_p_value": np.asarray(cluster_p_values, dtype=float),
+        "triple_significant": cluster_p <= TRIPLE_STAR_P,
+    }
+
+
+def bootstrap_recording(
+    time_min,
+    observed_rail,
+    observed_off_rail,
+    rail_sums,
+    off_rail_sums,
+    rail_counts,
+    off_rail_counts,
+    rng,
+):
+    components = rail_sums.shape[1]
+    bootstrap_indices = rng.integers(
+        0,
+        components,
+        size=(BOOTSTRAP_SAMPLES, components),
+    )
+    rail_bootstrap = np.empty((BOOTSTRAP_SAMPLES, len(time_min)), dtype=float)
+    off_rail_bootstrap = np.empty_like(rail_bootstrap)
+    baseline = time_min <= BASELINE_MINUTES
+
+    for bootstrap_index, sampled_components in enumerate(bootstrap_indices):
+        rail_intensity = (
+            rail_sums[:, sampled_components].sum(axis=1)
+            / rail_counts[sampled_components].sum()
+        )
+        off_rail_intensity = (
+            off_rail_sums[:, sampled_components].sum(axis=1)
+            / off_rail_counts[sampled_components].sum()
+        )
+        rail_bootstrap[bootstrap_index] = (
+            rail_intensity / rail_intensity[baseline].mean()
+        )
+        off_rail_bootstrap[bootstrap_index] = (
+            off_rail_intensity / off_rail_intensity[baseline].mean()
+        )
+
+    rail_bootstrap = centered_rolling_mean_matrix(time_min, rail_bootstrap)
+    off_rail_bootstrap = centered_rolling_mean_matrix(
+        time_min,
+        off_rail_bootstrap,
+    )
+    observed_rail = centered_rolling_mean(time_min, observed_rail)
+    observed_off_rail = centered_rolling_mean(time_min, observed_off_rail)
+
+    tail = (1.0 - CONFIDENCE_LEVEL) * 50.0
+    rail_ci = np.percentile(rail_bootstrap, [tail, 100.0 - tail], axis=0)
+    off_rail_ci = np.percentile(
+        off_rail_bootstrap,
+        [tail, 100.0 - tail],
+        axis=0,
+    )
+
+    observed_difference = observed_rail - observed_off_rail
+    bootstrap_difference = rail_bootstrap - off_rail_bootstrap
+    difference_se = np.std(bootstrap_difference, axis=0, ddof=1)
+    if np.any(difference_se == 0):
+        raise ValueError("Bootstrap difference standard error must be positive")
+    cluster_test = cluster_mass_test(
+        observed_difference,
+        bootstrap_difference,
+        difference_se,
+    )
+
+    return {
+        "bootstrap_indices": bootstrap_indices,
+        "rail_bootstrap": rail_bootstrap.astype(np.float32),
+        "off_rail_bootstrap": off_rail_bootstrap.astype(np.float32),
+        "rail_smoothed": observed_rail,
+        "off_rail_smoothed": observed_off_rail,
+        "rail_ci_lower": rail_ci[0],
+        "rail_ci_upper": rail_ci[1],
+        "off_rail_ci_lower": off_rail_ci[0],
+        "off_rail_ci_upper": off_rail_ci[1],
+        "difference": observed_difference,
+        "difference_se": difference_se,
+        **cluster_test,
+    }
+
+
+def build_component_cache(primary_cache):
+    component_cache = {}
+    for recording in ["off_to_on", "on_to_off"]:
+        (
+            rail_labels,
+            off_rail_labels,
+            rail_counts,
+            off_rail_counts,
+        ) = component_geometry(
+            primary_cache[f"{recording}_rail_mask"],
+            primary_cache[f"{recording}_off_rail_mask"],
+        )
+        rail_sums, off_rail_sums = measure_component_time_courses(
+            recording,
+            rail_labels,
+            off_rail_labels,
+        )
+        values = {
+            "rail_labels": rail_labels,
+            "off_rail_labels": off_rail_labels,
+            "rail_counts": rail_counts,
+            "off_rail_counts": off_rail_counts,
+            "rail_sums": rail_sums,
+            "off_rail_sums": off_rail_sums,
+        }
+        component_cache.update(
+            {
+                f"{recording}_{name}": value
+                for name, value in values.items()
+            }
+        )
+    component_cache["parallel_workers"] = np.asarray(PARALLEL_WORKERS)
+    np.savez_compressed(COMPONENT_CACHE_PATH, **component_cache)
+
+
+def build_bootstrap_cache(primary_cache, component_cache):
+    rng = np.random.default_rng(BOOTSTRAP_SEED)
+    bootstrap_cache = {}
+    for recording in ["off_to_on", "on_to_off"]:
+        result = bootstrap_recording(
+            primary_cache[f"{recording}_time_min"],
+            primary_cache[f"{recording}_rail_ff0"],
+            primary_cache[f"{recording}_off_rail_ff0"],
+            component_cache[f"{recording}_rail_sums"],
+            component_cache[f"{recording}_off_rail_sums"],
+            component_cache[f"{recording}_rail_counts"],
+            component_cache[f"{recording}_off_rail_counts"],
+            rng,
+        )
+        bootstrap_cache.update(
+            {
+                f"{recording}_{name}": value
+                for name, value in result.items()
+            }
+        )
+
+    bootstrap_cache.update(
+        {
+            "bootstrap_samples": np.asarray(BOOTSTRAP_SAMPLES),
+            "bootstrap_seed": np.asarray(BOOTSTRAP_SEED),
+            "confidence_level": np.asarray(CONFIDENCE_LEVEL),
+            "cluster_forming_z": np.asarray(CLUSTER_FORMING_Z),
+            "triple_star_p": np.asarray(TRIPLE_STAR_P),
+            "rolling_window_seconds": np.asarray(ROLLING_WINDOW_SECONDS),
+            "inference_method": np.asarray("cluster_mass_bootstrap_v1"),
+        }
+    )
+    np.savez_compressed(BOOTSTRAP_CACHE_PATH, **bootstrap_cache)
+
+
 def setup_style():
     sns.set_theme(context="talk", style="ticks", palette="dark")
     plt.rcParams["font.family"] = "serif"
@@ -266,73 +574,125 @@ def centered_rolling_mean(time_min, values):
     return (cumulative[right] - cumulative[left]) / (right - left)
 
 
-def plot_fluorescence_dynamics(cache):
-    setup_style()
-    fig, ax = plt.subplots(figsize=(4.2, 3.5))
+def significant_runs(significant):
+    changes = np.diff(np.pad(significant.astype(int), (1, 1)))
+    starts = np.flatnonzero(changes == 1)
+    stops = np.flatnonzero(changes == -1) - 1
+    return zip(starts, stops)
 
-    lines = [
+
+def plot_fluorescence_dynamics(cache, bootstrap_cache):
+    setup_style()
+    fig, axes = plt.subplots(1, 2, figsize=(7.5, 3.5), sharey=True)
+    panels = [
         (
             "off_to_on",
-            "rail_ff0",
-            "OFF-to-ON rail",
+            "OFF-to-ON",
             COLORS["off_to_on_rail"],
-        ),
-        (
-            "off_to_on",
-            "off_rail_ff0",
-            "OFF-to-ON off rail",
             COLORS["off_to_on_off_rail"],
         ),
         (
             "on_to_off",
-            "rail_ff0",
-            "ON-to-OFF rail",
+            "ON-to-OFF",
             COLORS["on_to_off_rail"],
-        ),
-        (
-            "on_to_off",
-            "off_rail_ff0",
-            "ON-to-OFF off rail",
             COLORS["on_to_off_off_rail"],
         ),
     ]
     plotted_values = []
-    for recording, signal, label, color in lines:
+    for ax, (recording, title, rail_color, off_rail_color) in zip(axes, panels):
         time_min = cache[f"{recording}_time_min"]
-        values = centered_rolling_mean(
-            time_min,
-            cache[f"{recording}_{signal}"],
+        rail_values = bootstrap_cache[f"{recording}_rail_smoothed"]
+        off_rail_values = bootstrap_cache[f"{recording}_off_rail_smoothed"]
+        rail_ci_lower = bootstrap_cache[f"{recording}_rail_ci_lower"]
+        rail_ci_upper = bootstrap_cache[f"{recording}_rail_ci_upper"]
+        off_rail_ci_lower = bootstrap_cache[f"{recording}_off_rail_ci_lower"]
+        off_rail_ci_upper = bootstrap_cache[f"{recording}_off_rail_ci_upper"]
+        plotted_values.extend(
+            [
+                rail_ci_lower,
+                rail_ci_upper,
+                off_rail_ci_lower,
+                off_rail_ci_upper,
+            ]
         )
-        plotted_values.append(values)
+
+        ax.fill_between(
+            time_min,
+            rail_ci_lower,
+            rail_ci_upper,
+            color=rail_color,
+            alpha=0.18,
+            linewidth=0,
+        )
+        ax.fill_between(
+            time_min,
+            off_rail_ci_lower,
+            off_rail_ci_upper,
+            color=off_rail_color,
+            alpha=0.25,
+            linewidth=0,
+        )
         ax.plot(
             time_min,
-            values,
-            color=color,
+            rail_values,
+            color=rail_color,
             linestyle="-",
-            label=label,
+            label="Rail",
         )
-
-    ax.set_xlabel("Time (min)")
-    ax.set_ylabel(r"$F/F_0$")
-
-    xmax = max(
-        float(cache["on_to_off_time_min"][-1]),
-        float(cache["off_to_on_time_min"][-1]),
-    )
-    ax.set_xlim(0, xmax)
-    ax.set_xticks([0, xmax])
+        ax.plot(
+            time_min,
+            off_rail_values,
+            color=off_rail_color,
+            linestyle="-",
+            label="Off rail",
+        )
+        xmax = float(time_min[-1])
+        ax.set_xlim(0, xmax)
+        ax.set_xticks([0, xmax])
+        ax.set_xlabel("Time (min)")
+        ax.set_title(title)
+        ax.legend(
+            loc="upper left",
+            bbox_to_anchor=(0.0, 0.92),
+            fontsize=8,
+            frameon=False,
+        )
+        ax.set_box_aspect(1)
 
     all_values = np.concatenate(plotted_values)
     value_min = float(np.nanmin(all_values))
     value_max = float(np.nanmax(all_values))
-    padding = 0.05 * (value_max - value_min)
-    y_min = max(0.0, np.floor((value_min - padding) * 10.0) / 10.0)
-    y_max = np.ceil((value_max + padding) * 10.0) / 10.0
-    ax.set_ylim(y_min, y_max)
-    ax.set_yticks([y_min, y_max])
+    value_span = value_max - value_min
+    y_min = max(0.0, np.floor((value_min - 0.05 * value_span) * 10.0) / 10.0)
+    y_max = np.ceil((value_max + 0.25 * value_span) * 10.0) / 10.0
+    significance_y = value_max + 0.15 * value_span
+    star_y = value_max + 0.16 * value_span
 
-    ax.legend(loc="best", fontsize=7, frameon=False)
-    sns.despine(ax=ax, trim=True, offset=10)
+    for ax, (recording, _, _, _) in zip(axes, panels):
+        time_min = cache[f"{recording}_time_min"]
+        significant = bootstrap_cache[f"{recording}_triple_significant"]
+        for start, stop in significant_runs(significant):
+            ax.plot(
+                [time_min[start], time_min[stop]],
+                [significance_y, significance_y],
+                color="black",
+                linewidth=2,
+                solid_capstyle="butt",
+            )
+            ax.text(
+                (time_min[start] + time_min[stop]) / 2.0,
+                star_y,
+                "***",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+            )
+        ax.set_ylim(y_min, y_max)
+        ax.set_yticks([y_min, y_max])
+        sns.despine(ax=ax, trim=True, offset=10)
+
+    axes[0].set_ylabel(r"$F/F_0$")
+    fig.subplots_adjust(wspace=0.32)
     fig.savefig(OUTPUT_PATH, bbox_inches="tight", facecolor="white", transparent=False)
     plt.close(fig)
 
@@ -341,4 +701,10 @@ if not CACHE_PATH.exists():
     build_cache()
 
 with np.load(CACHE_PATH) as cache:
-    plot_fluorescence_dynamics(cache)
+    if not COMPONENT_CACHE_PATH.exists():
+        build_component_cache(cache)
+    with np.load(COMPONENT_CACHE_PATH) as component_cache:
+        if not BOOTSTRAP_CACHE_PATH.exists():
+            build_bootstrap_cache(cache, component_cache)
+        with np.load(BOOTSTRAP_CACHE_PATH) as bootstrap_cache:
+            plot_fluorescence_dynamics(cache, bootstrap_cache)

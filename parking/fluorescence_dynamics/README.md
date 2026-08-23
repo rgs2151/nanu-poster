@@ -13,7 +13,11 @@
 - At each timepoint, calculate the mean raw motor-channel intensity separately across all rail pixels and all off-rail pixels. Do not subtract one region from the other.
 - Define `F0` separately for every recording-region pair as its mean intensity during the first five minutes, then divide that pair's full intensity trace by its own `F0`.
 - Keep every timepoint in acquisition order and apply a centered 30-second rolling mean to each normalized trace for display. At each plotted timepoint, average the observations within 15 seconds before and after it; use the available observations at the recording edges.
-- Plot the four normalized traces together in `plots/fluorescence_dynamics.pdf`.
+- Label the fixed rail mask into connected spatial structures: 17 in OFF-to-ON and 16 in ON-to-OFF. Assign every off-rail pixel to its nearest connected rail structure so each structure contributes a paired rail and off-rail time course.
+- Draw 1,000 bootstrap samples of the connected structures with replacement. When a structure is drawn, retain all its timepoints and both of its paired regions; aggregate sampled pixel sums and counts, recalculate each sampled trace's `F0`, and apply the same 30-second rolling mean.
+- Use the 2.5th and 97.5th percentiles of the 1,000 sampled traces as pointwise 95% confidence intervals.
+- Compare rail minus off rail with a two-sided temporal cluster-mass bootstrap that controls repeated testing across the time axis. Display only areas with family-wise-error-corrected `p <= 0.001`.
+- Plot OFF-to-ON on the left and ON-to-OFF on the right in `plots/fluorescence_dynamics.pdf`.
 
 ## Variables
 
@@ -28,40 +32,56 @@
 - Display smoothing: centered 30-second rolling mean applied separately to each normalized trace.
 - Time: exact embedded elapsed time for ON-to-OFF; timepoint index multiplied by 2.188 seconds for OFF-to-ON.
 - Detector diagnostic: the fraction of pixels in each region equal to the 16-bit maximum of 65,535 at every timepoint.
-- Cache: `cache/fluorescence_dynamics.npz`, containing fixed masks, rail references, processed references, thresholds, reference-frame indices, time axes, raw regional means, `F0` values, normalized traces, saturation fractions, and all fixed analysis parameters.
+- Resampling units: 17 connected rail structures in OFF-to-ON and 16 in ON-to-OFF.
+- Bootstrap settings: 1,000 paired cluster resamples with replacement, random seed 2,151, and 95% pointwise percentile intervals.
+- Cluster-forming threshold: absolute standardized rail-minus-off-rail difference at least 1.96.
+- Multiple-testing threshold: cluster-level family-wise-error-corrected `p <= 0.001`, displayed as `***`.
+- Primary cache: `cache/fluorescence_dynamics.npz`, containing fixed masks, rail references, processed references, thresholds, reference-frame indices, time axes, raw regional means, `F0` values, normalized traces, saturation fractions, and fixed analysis parameters.
+- Component cache: `cache/fluorescence_components.npz`, containing component label images, pixel counts, and motor-intensity sums for every structure, region, and timepoint.
+- Bootstrap cache: `cache/fluorescence_bootstrap.npz`, containing all resample indices, 1,000 sampled traces per region and recording, confidence limits, observed differences, bootstrap standard errors, null maximum cluster masses, cluster boundaries, corrected cluster `p` values, significance masks, random seed, thresholds, and smoothing settings.
 - Output: `plots/fluorescence_dynamics.pdf`.
 
 ## Statistics
 
-- None; this output is descriptive.
-- Descriptive summaries: mean regional motor intensity at every timepoint, the first-five-minute mean `F0`, the normalized ratio `F/F0`, and a centered 30-second rolling mean for display.
-- Directional hypothesis for ON-to-OFF: rail motor `F/F0` decreases over time.
-- Directional hypothesis for OFF-to-ON: rail motor `F/F0` increases over time.
-- No null distribution, inferential threshold, model, confidence interval, or statistical test is used at this stage.
-- The two recordings are single experiments rather than biological replicates, so pixels and frames are not treated as independent experimental replicates.
+- Test: paired connected-structure bootstrap with a two-sided maximum temporal cluster-mass correction.
+- Null hypothesis: after accounting for variation among connected rail structures, rail and off-rail `F/F0` do not differ over any temporally contiguous area.
+- Alternative hypothesis: rail and off-rail `F/F0` differ over at least one temporally contiguous area.
+- Repeated measurements: resample whole connected structures rather than pixels or frames. Every selected structure carries its complete time course and paired rail/off-rail regions into a bootstrap sample.
+- Pointwise statistic: the smoothed rail-minus-off-rail difference divided by its bootstrap standard error.
+- Cluster statistic: the sum of the absolute pointwise statistics across adjacent timepoints exceeding 1.96.
+- Null distribution: center each bootstrap difference on the observed difference, find the largest cluster mass in each of 1,000 resamples, and compare every observed cluster with that maximum-mass distribution.
+- Multiple comparisons: using the largest null cluster in each resample controls the family-wise error rate over the full time axis within each recording.
+- Cluster `p` value: `(1 + number of null maximum cluster masses at least as large as the observed mass) / 1,001`. The smallest attainable value is `1/1,001 = 0.000999`.
+- Decision rule: draw a black bar and `***` only for corrected cluster `p <= 0.001`.
+- Confidence intervals: pointwise 95% percentile intervals from the 1,000 paired connected-structure bootstrap samples.
+- Scope: the uncertainty and test describe variation across segmented structures within each single field of view. They are not biological-replicate confidence intervals or population-level evidence.
 
 ## Legends
 
 - X axis: time after the first stored timepoint in minutes.
 - Y axis: motor fluorescence normalized to the first-five-minute regional baseline, `F/F0`.
-- Color/value: OFF-to-ON is a red family, with dark red (`#991B1B`) for rail and light red (`#E8A6A6`) for off rail. ON-to-OFF is a green family, with dark green (`#166534`) for rail and light green (`#86C995`) for off rail.
-- Grouping: color family identifies the transition and color darkness identifies rail versus off rail.
+- Color/value: OFF-to-ON uses dark red (`#991B1B`) for rail and light red (`#E8A6A6`) for off rail. ON-to-OFF uses dark green (`#166534`) for rail and light green (`#86C995`) for off rail.
+- Grouping: each panel has a two-entry legend containing only `Rail` and `Off rail`; color darkness identifies the region.
 - Ordering/sorting: timepoints remain in acquisition order.
-- Lines/markers/labels: four solid lines without markers or horizontal reference lines; the legend is frameless.
-- Panels: one panel containing all four time courses and no title.
+- Lines/markers/labels: solid lines show the 30-second rolling means, translucent bands show pointwise 95% bootstrap confidence intervals, and black bars with `***` identify corrected cluster `p <= 0.001`. There are no horizontal reference lines.
+- Panels: one row by two columns; OFF-to-ON is left and ON-to-OFF is right. The y axis is shared.
 
 ## Interpretation
 
 - The OFF-to-ON rail trace rises to about 1.8 times its first-five-minute baseline, whereas its off-rail trace reaches about 1.1. The much larger rail-region change is the visually dominant result.
 - The ON-to-OFF rail and off-rail traces both remain close to their own baselines. Their last-five-minute means are approximately 1.02 and 0.99, respectively, so this recording does not show a comparable sustained regional change.
 - The separation between the OFF-to-ON rail and off-rail traces indicates that the large motor-fluorescence increase is concentrated in the DNA-defined rail region rather than shared equally by nearby non-rail pixels.
-- These traces describe two individual recordings and do not establish population-level reproducibility, molecular binding below optical resolution, or statistical significance.
+- OFF-to-ON has one corrected temporal cluster from 5.43 to 76.14 minutes with `p = 0.000999`, displayed as `***`.
+- ON-to-OFF has no temporal cluster meeting the `p <= 0.001` display threshold.
+- These traces describe two individual recordings. The within-recording cluster test does not establish population-level reproducibility, biological-replicate significance, or molecular binding below optical resolution.
 
 ## Notes
 
-- The cache is reused whenever present so plotting and documentation changes do not reread or resegment the TIFF stacks. Delete the cache only when an explicit recomputation is required.
+- The primary, component, and bootstrap caches are reused whenever present. Plot-only changes do not reread TIFFs, recompute component measurements, or rerun the 1,000 resamples.
 - Raw regional means are cached as well as normalized traces, so a later normalization change can be calculated without rereading the source TIFFs.
-- The plotted lines use a centered 30-second rolling mean. Unsmoothed normalized traces and raw regional means remain in the cache; no background subtraction, null distribution, or statistical trend calculation is applied.
+- The plotted lines use a centered 30-second rolling mean. Unsmoothed normalized traces and raw regional means remain cached; no background subtraction or separate trend-direction test is applied.
+- The component reduction uses all 64 available CPU workers. Its output is cached separately so later resampling-method changes do not reread the TIFFs.
+- Confidence-interval width reflects heterogeneity among connected rail structures within a recording; it must not be interpreted as variation across biological experiments.
 - The ON-to-OFF `F0` values are 639.4 detector units on rail and 555.9 off rail. The OFF-to-ON values are 16,794.4 on rail and 15,299.9 off rail.
 - Saturated motor pixels are retained in the regional means, and their fractions are cached. No ON-to-OFF pixels in either region are saturated. In OFF-to-ON, the rail-region saturated fraction reaches 9.2% and averages 4.0%; because clipped values are lower bounds on the underlying signal, the measured rail increase is conservative at affected timepoints.
 - The completed `parking/vis` unit remains frozen.
@@ -70,6 +90,8 @@
 
 - Waters, J. C. (2009). Accuracy and precision in quantitative fluorescence microscopy. *Journal of Cell Biology*, 185(7), 1135–1148. https://doi.org/10.1083/jcb.200903097
 - Otsu, N. (1979). A threshold selection method from gray-level histograms. *IEEE Transactions on Systems, Man, and Cybernetics*, 9(1), 62–66. https://doi.org/10.1109/TSMC.1979.4310076
+- Cheng, G., Yu, Z., & Huang, J. Z. (2013). The cluster bootstrap consistency in generalized estimating equations. *Journal of Multivariate Analysis*, 115, 33–47. https://doi.org/10.1016/j.jmva.2012.09.003
+- Maris, E., & Oostenveld, R. (2007). Nonparametric statistical testing of EEG- and MEG-data. *Journal of Neuroscience Methods*, 164(1), 177–190. https://doi.org/10.1016/j.jneumeth.2007.03.024
 - `data/README.md` for channel mapping, time calibration, and replication constraints.
 - `DECISIONS.md` for shared definitions of time and rail regions.
 - `STYLE.md` for the required plot appearance.

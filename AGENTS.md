@@ -37,3 +37,9 @@
 - Prefer moving historical material into `ref/` over deleting it when it may still explain where current code came from.
 - Prefer moving investigation outputs into a parked compact unit over leaving completed work in `debug/`.
 - Leave unrelated user changes in place and work around them.
+
+# Performance and Caching
+
+- Before expensive analysis, inspect the available CPU, GPU, memory, and input-file layout, then use vectorization, parallel CPU execution, or GPU acceleration when it materially reduces runtime.
+- Use all appropriate available compute without oversubscribing serial disk access, duplicating large arrays unnecessarily, or moving small workloads to a GPU when transfer overhead would make them slower.
+- Cache expensive reusable intermediates and stochastic results, including resample indices, random seeds, parameters, confidence intervals, test outputs, and final derived arrays, so plot-only changes never repeat the expensive calculation.
