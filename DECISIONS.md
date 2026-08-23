@@ -16,6 +16,6 @@ Do not put unit-specific file paths, temporary subsets, cache names, panel mappi
 
 - Decision: A rail region is the DNA-derived rail mask together with its fixed local expansion margin. An off-rail region is a nearby comparison region outside that expanded rail region. The DNA channel alone defines both regions; motor fluorescence never changes their geometry.
 - Why: The expansion includes the visible optical width of a rail and tolerates small residual channel-registration offsets. A nearby off-rail region provides a spatial control exposed to similar local illumination.
-- Use this when: Comparing motor fluorescence on and off DNA rails across recordings or timepoints.
+- Use this when: Comparing motor fluorescence on and off DNA rails across recordings or timepoints, including all remaining rail-fraction and motor-run analyses of the current recordings.
 - Do not use this for: Claiming molecular binding below the optical resolution limit, defining rails from motor brightness, or changing a region frame by frame to maximize motor overlap.
-- Notes: Freeze the region geometry for each recording before measuring the motor channel. Unit-specific expansion widths and off-rail boundaries belong in the compact-unit README.
+- Notes: Freeze the region geometry for each recording before measuring the motor channel. For the two current recordings, downstream analyses must reuse the already approved cached rail-region and off-rail arrays from the fluorescence-dynamics analysis rather than segmenting the rails again. Unit-specific expansion widths, off-rail boundaries, and cache provenance belong in the compact-unit README.
