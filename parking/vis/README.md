@@ -49,6 +49,56 @@
 
 - `data/README.md` for the source-data inventory and recording constraints.
 
+# timing_consistency
+
+## Method
+
+- Load the per-frame `ElapsedTime-ms` values embedded in `data/on_to_off.tif` without loading or changing the image pixels.
+- Subtract the first stored timestamp so that the first frame is time zero.
+- Calculate the median interval between consecutive frames. The observed median is 2.188 seconds.
+- Construct a constant-rate time axis as `frame index x 2.188 seconds`.
+- Plot the constant-rate time against the actual elapsed time and add an identity line representing perfect agreement.
+- Write `plots/timing_consistency.pdf`.
+
+## Variables
+
+- Data/input: the 2,000 per-frame elapsed timestamps in `data/on_to_off.tif`.
+- Actual elapsed time: each embedded timestamp minus the first embedded timestamp, expressed in minutes.
+- Assumed elapsed time: zero-based frame index multiplied by 2.188 seconds, expressed in minutes.
+- Reference: `actual elapsed time = assumed elapsed time`.
+- Output: `parking/vis/plots/timing_consistency.pdf`.
+
+## Statistics
+
+- None; this output is descriptive.
+- Descriptive summary: the median of the 1,999 observed consecutive-frame intervals is 2.188 seconds.
+- No null hypothesis, alternative hypothesis, statistical threshold, model, or test is used.
+
+## Legends
+
+- X axis: elapsed time in minutes if every frame were separated by the median 2.188-second interval.
+- Y axis: actual elapsed time in minutes read from the TIFF metadata.
+- Color/value: the dark-red line is recorded timing; the black dashed identity line is perfect constant timing.
+- Grouping: all 2,000 frames from the single ON-to-OFF recording.
+- Ordering/sorting: frames remain in acquisition order.
+- Lines/markers/labels: distance above or below the identity line is accumulated timing error; the final marker is labelled with the end-of-recording difference.
+- Panels: one timing-agreement panel.
+
+## Interpretation
+
+- Points on the identity line agree exactly with a constant 2.188-second frame interval.
+- Points above the line mean that the real acquisition took longer than the constant-rate approximation; points below it mean that it took less time.
+- The final difference shows how much timing error accumulates by the end of the recording.
+
+## Notes
+
+- This diagnostic evaluates the proposed constant-rate approximation; it does not measure fluorescence or switching behavior.
+- The corresponding OFF-to-ON time axis will use the same assumed 2.188-second interval because that TIFF contains no physical timing metadata.
+
+## References
+
+- `data/README.md` for the source-data inventory and time-calibration rule.
+
 # off_to_on_middle_frame
 
 ## Method

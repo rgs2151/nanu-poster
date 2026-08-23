@@ -4,10 +4,10 @@ Use this file only for choices that must stay consistent across multiple analyse
 
 Do not put unit-specific file paths, temporary subsets, cache names, panel mappings, or one-off thresholds here. Put those details in the owning compact unit README.
 
-## <Decision Name>
+## Time axes
 
-- Decision: State the rule or definition that should stay consistent.
-- Why: Explain the conceptual reason for the rule.
-- Use this when: Name the kinds of analyses that should follow this decision.
-- Do not use this for: Name the cases where this decision does not apply.
-- Notes: Add only durable context that future analyses need.
+- Decision: Set the first stored timepoint to zero. Use the embedded per-frame elapsed timestamps for the ON-to-OFF recording. For the OFF-to-ON recording, use `timepoint index x 2.188 seconds`, where 2.188 seconds is the median consecutive-frame interval in the ON-to-OFF recording.
+- Why: The ON-to-OFF TIFF provides real timestamps, whereas the OFF-to-ON TIFF provides ordered timepoints but no physical time calibration. Applying the observed median interval supplies one explicit, consistent approximation for the uncalibrated stack.
+- Use this when: Constructing time axes for visualizations and quantitative analyses of these two recordings.
+- Do not use this for: Claiming that the OFF-to-ON acquisition rate was independently measured, or replacing the exact ON-to-OFF timestamps with a constant interval when exact timing matters.
+- Notes: The assumed OFF-to-ON duration is approximately 76.14 minutes from its first to last timepoint.
