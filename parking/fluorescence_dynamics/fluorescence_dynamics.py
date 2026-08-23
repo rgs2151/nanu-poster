@@ -653,7 +653,7 @@ def plot_fluorescence_dynamics(cache, bootstrap_cache):
         ax.set_title(title)
         ax.legend(
             loc="upper left",
-            bbox_to_anchor=(0.0, 0.92),
+            bbox_to_anchor=(0.0, 1.0),
             fontsize=8,
             frameon=False,
         )
@@ -665,13 +665,14 @@ def plot_fluorescence_dynamics(cache, bootstrap_cache):
     value_span = value_max - value_min
     y_min = max(0.0, np.floor((value_min - 0.05 * value_span) * 10.0) / 10.0)
     y_max = np.ceil((value_max + 0.25 * value_span) * 10.0) / 10.0
-    significance_y = value_max + 0.15 * value_span
-    star_y = value_max + 0.16 * value_span
+    significance_y = value_max + 0.07 * value_span
+    star_y = value_max + 0.08 * value_span
 
     for ax, (recording, _, _, _) in zip(axes, panels):
         time_min = cache[f"{recording}_time_min"]
         significant = bootstrap_cache[f"{recording}_triple_significant"]
-        for start, stop in significant_runs(significant):
+        runs = list(significant_runs(significant))
+        for start, stop in runs:
             ax.plot(
                 [time_min[start], time_min[stop]],
                 [significance_y, significance_y],
@@ -683,6 +684,22 @@ def plot_fluorescence_dynamics(cache, bootstrap_cache):
                 (time_min[start] + time_min[stop]) / 2.0,
                 star_y,
                 "***",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+            )
+        if not runs:
+            ax.plot(
+                [time_min[0], time_min[-1]],
+                [significance_y, significance_y],
+                color="black",
+                linewidth=2,
+                solid_capstyle="butt",
+            )
+            ax.text(
+                (time_min[0] + time_min[-1]) / 2.0,
+                star_y,
+                "NS",
                 ha="center",
                 va="bottom",
                 fontsize=9,

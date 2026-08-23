@@ -52,7 +52,7 @@
 - Null distribution: center each bootstrap difference on the observed difference, find the largest cluster mass in each of 1,000 resamples, and compare every observed cluster with that maximum-mass distribution.
 - Multiple comparisons: using the largest null cluster in each resample controls the family-wise error rate over the full time axis within each recording.
 - Cluster `p` value: `(1 + number of null maximum cluster masses at least as large as the observed mass) / 1,001`. The smallest attainable value is `1/1,001 = 0.000999`.
-- Decision rule: draw a black bar and `***` only for corrected cluster `p <= 0.001`.
+- Decision rule: draw a black bar and `***` for corrected cluster `p <= 0.001`; when no cluster meets that threshold, draw a full-width black bar labeled `NS`.
 - Confidence intervals: pointwise 95% percentile intervals from the 1,000 paired connected-structure bootstrap samples.
 - Scope: the uncertainty and test describe variation across segmented structures within each single field of view. They are not biological-replicate confidence intervals or population-level evidence.
 
@@ -63,7 +63,7 @@
 - Color/value: OFF-to-ON uses dark red (`#991B1B`) for rail and light red (`#E8A6A6`) for off rail. ON-to-OFF uses dark green (`#166534`) for rail and light green (`#86C995`) for off rail.
 - Grouping: each panel has a two-entry legend containing only `Rail` and `Off rail`; color darkness identifies the region.
 - Ordering/sorting: timepoints remain in acquisition order.
-- Lines/markers/labels: solid lines show the 30-second rolling means, translucent bands show pointwise 95% bootstrap confidence intervals, and black bars with `***` identify corrected cluster `p <= 0.001`. There are no horizontal reference lines.
+- Lines/markers/labels: solid lines show the 30-second rolling means and translucent bands show pointwise 95% bootstrap confidence intervals. Below each legend, a black bar is labeled `***` for corrected cluster `p <= 0.001` or `NS` when no cluster meets that threshold. There are no baseline reference lines.
 - Panels: one row by two columns; OFF-to-ON is left and ON-to-OFF is right. The y axis is shared.
 
 ## Interpretation
@@ -72,7 +72,7 @@
 - The ON-to-OFF rail and off-rail traces both remain close to their own baselines. Their last-five-minute means are approximately 1.02 and 0.99, respectively, so this recording does not show a comparable sustained regional change.
 - The separation between the OFF-to-ON rail and off-rail traces indicates that the large motor-fluorescence increase is concentrated in the DNA-defined rail region rather than shared equally by nearby non-rail pixels.
 - OFF-to-ON has one corrected temporal cluster from 5.43 to 76.14 minutes with `p = 0.000999`, displayed as `***`.
-- ON-to-OFF has no temporal cluster meeting the `p <= 0.001` display threshold.
+- ON-to-OFF has no temporal cluster meeting the `p <= 0.001` display threshold and is labeled `NS`.
 - These traces describe two individual recordings. The within-recording cluster test does not establish population-level reproducibility, biological-replicate significance, or molecular binding below optical resolution.
 
 ## Notes
