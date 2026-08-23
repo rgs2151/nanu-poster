@@ -260,3 +260,65 @@
 ## References
 
 - `data/README.md` for the source-data inventory and recording constraints.
+
+# on_to_off_panels
+
+## Method
+
+- Load `data/on_to_off.tif` without changing the source file and select five evenly spaced frames spanning the full recording, including its first and last frames.
+- Split each selected 512-pixel-wide frame at its centre column. Treat the left half as motor fluorescence and the right half as DNA-rail fluorescence from the same scene and timepoint.
+- Determine one fixed motor display range from the 1st and 99.8th percentiles of motor pixels in 240 evenly spaced survey frames. Apply this same motor range to all five panels so motor changes remain visually comparable through time.
+- The raw rail channel photobleaches substantially. For the structural rail overlay only, apply the same 1st-to-99.8th-percentile contrast rule separately to each selected rail frame. This prevents the progressively white, overexposed rail appearance in the old GIF while preserving each frame's rail geometry.
+- Apply the standard ImageJ/Fiji yellow monochrome lookup table to normalized motor intensity and the blue monochrome lookup table to normalized rail intensity. Add the two RGB layers and clip at white, so motor is yellow, rail is blue, and spatial overlap is white.
+- Export each composite directly as a native-resolution lossless PNG without axes, labels, timestamps, borders, interpolation, cropping, denoising, segmentation, or spatial realignment.
+- Write the five separate images to `plots/on_off_panels/`.
+
+## Variables
+
+- Data/input: `data/on_to_off.tif`, containing 2,000 raw 16-bit frames of 512 rows by 512 columns.
+- Selected zero-based frames: 0, 499, 999, 1,499, and 1,999.
+- Selected elapsed times: 0.00, 17.34, 37.03, 56.57, and 76.00 minutes from the embedded TIFF timestamps.
+- Panel mapping: columns 0–255 are motor proteins; columns 256–511 are DNA rails.
+- Motor contrast survey: 240 evenly spaced frames, including the recording endpoints.
+- Fixed motor display range: 311 to 2,319 raw detector units.
+- Rail display ranges: 314–10,062; 315–5,761; 314–4,601; 315–3,719; and 312–3,223 raw detector units for the five selected frames, respectively.
+- Lookup-table endpoints: motor yellow `[1, 1, 0]`; rail blue `[0, 0, 1]`; additive overlap is white `[1, 1, 1]`.
+- Compute: 64 CPU workers read disjoint TIFF frame chunks; the selected raw frames, indices, and display limits are stored in `cache/on_to_off_panels.npz`.
+- Outputs: `plots/on_off_panels/on_to_off_01.png` through `on_to_off_05.png`, each 256 pixels wide by 512 pixels high.
+
+## Statistics
+
+- None; these outputs are descriptive poster images.
+- No null hypothesis, alternative hypothesis, statistical threshold, fitted model, or test is used.
+- The percentile rules control display contrast only. They do not classify motor-positive pixels or measure rail or motor fluorescence.
+- The fixed motor range is appropriate because it preserves motor brightness comparability through time. The per-frame rail range is appropriate only because the rail is used here as a structural location guide and the user requested correction of its misleading progressive exposure.
+
+## Legends
+
+- X axis: image x-coordinate; no axis or tick labels are drawn.
+- Y axis: image y-coordinate; no axis or tick labels are drawn.
+- Color/value: yellow intensity is the normalized raw motor signal; blue intensity is the normalized raw DNA-rail signal; white indicates additive spatial overlap of strong motor and rail signals; black indicates low signal in both channels.
+- Grouping: five paired motor-plus-rail composites from one ON-to-OFF recording.
+- Ordering/sorting: filenames 01 through 05 follow acquisition order from 0 to approximately 76 minutes.
+- Lines/markers/labels: none; each file contains only the composite microscopy image.
+- Panels: five separate PNG files rather than one assembled multi-panel figure so each image can be placed independently on the poster.
+
+## Interpretation
+
+- The five images show the motor-channel progression across the full ON-to-OFF recording while keeping the rail in the intended blue and the motor in yellow.
+- The rail layer no longer changes progressively from blue to blown-out white because every selected rail frame receives the same tightly clipped contrast rule.
+- These are display composites for the poster. They should not be used to compare rail intensity between timepoints because the rail contrast is normalized separately in each frame.
+
+## Notes
+
+- The TIFF metadata stores grayscale ImageJ lookup tables only; it does not preserve the poster's original pseudocolor assignment. Blue rails and yellow motors were inferred from the supplied poster reference and reproduced with ImageJ/Fiji's standard monochrome channel colors.
+- The raw source values remain unchanged. Pseudocoloring and contrast mapping affect only the exported RGB display images.
+- The outputs use the full raw field of view and native pixel dimensions. Upscaling should be done only at poster placement time if required; it would not add image information.
+- The existing middle-frame PDFs, timing plot, and overview MP4 files in this unit are unchanged.
+
+## References
+
+- ImageJ documentation for composite images, channel lookup tables, and channel merging: https://imagej.net/ij/docs/menus/image.html
+- ImageJ color-processing documentation: https://imagej.github.io/imaging/color-image-processing
+- `data/README.md` for source layout and timing metadata.
+- `# on_to_off_video` in this README for the existing fixed-contrast full-recording overview.
