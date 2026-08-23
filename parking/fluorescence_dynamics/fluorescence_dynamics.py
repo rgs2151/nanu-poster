@@ -664,13 +664,22 @@ def plot_fluorescence_dynamics(cache, bootstrap_cache):
     value_max = float(np.nanmax(all_values))
     value_span = value_max - value_min
     y_min = max(0.0, np.floor((value_min - 0.05 * value_span) * 10.0) / 10.0)
-    y_max = np.ceil((value_max + 0.25 * value_span) * 10.0) / 10.0
-    significance_y = value_max + 0.07 * value_span
-    star_y = value_max + 0.08 * value_span
+    y_max = 2.7
 
     for ax, (recording, _, _, _) in zip(axes, panels):
         time_min = cache[f"{recording}_time_min"]
         significant = bootstrap_cache[f"{recording}_triple_significant"]
+        panel_lower = min(
+            float(np.nanmin(bootstrap_cache[f"{recording}_rail_ci_lower"])),
+            float(np.nanmin(bootstrap_cache[f"{recording}_off_rail_ci_lower"])),
+        )
+        panel_upper = max(
+            float(np.nanmax(bootstrap_cache[f"{recording}_rail_ci_upper"])),
+            float(np.nanmax(bootstrap_cache[f"{recording}_off_rail_ci_upper"])),
+        )
+        panel_span = panel_upper - panel_lower
+        significance_y = panel_upper + 0.08 * panel_span
+        label_y = significance_y + 0.025 * (y_max - y_min)
         runs = list(significant_runs(significant))
         for start, stop in runs:
             ax.plot(
@@ -682,11 +691,11 @@ def plot_fluorescence_dynamics(cache, bootstrap_cache):
             )
             ax.text(
                 (time_min[start] + time_min[stop]) / 2.0,
-                star_y,
-                "***",
+                label_y,
+                r"$p < 0.001$",
                 ha="center",
                 va="bottom",
-                fontsize=9,
+                fontsize=8,
             )
         if not runs:
             ax.plot(
@@ -698,11 +707,11 @@ def plot_fluorescence_dynamics(cache, bootstrap_cache):
             )
             ax.text(
                 (time_min[0] + time_min[-1]) / 2.0,
-                star_y,
-                "NS",
+                label_y,
+                "N.S",
                 ha="center",
                 va="bottom",
-                fontsize=9,
+                fontsize=8,
             )
         ax.set_ylim(y_min, y_max)
         ax.set_yticks([y_min, y_max])

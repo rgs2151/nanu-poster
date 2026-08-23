@@ -35,7 +35,7 @@
 - Resampling units: 17 connected rail structures in OFF-to-ON and 16 in ON-to-OFF.
 - Bootstrap settings: 1,000 paired cluster resamples with replacement, random seed 2,151, and 95% pointwise percentile intervals.
 - Cluster-forming threshold: absolute standardized rail-minus-off-rail difference at least 1.96.
-- Multiple-testing threshold: cluster-level family-wise-error-corrected `p <= 0.001`, displayed as `***`.
+- Multiple-testing threshold: cluster-level family-wise-error-corrected `p <= 0.001`, displayed as `p < 0.001`.
 - Primary cache: `cache/fluorescence_dynamics.npz`, containing fixed masks, rail references, processed references, thresholds, reference-frame indices, time axes, raw regional means, `F0` values, normalized traces, saturation fractions, and fixed analysis parameters.
 - Component cache: `cache/fluorescence_components.npz`, containing component label images, pixel counts, and motor-intensity sums for every structure, region, and timepoint.
 - Bootstrap cache: `cache/fluorescence_bootstrap.npz`, containing all resample indices, 1,000 sampled traces per region and recording, confidence limits, observed differences, bootstrap standard errors, null maximum cluster masses, cluster boundaries, corrected cluster `p` values, significance masks, random seed, thresholds, and smoothing settings.
@@ -52,18 +52,18 @@
 - Null distribution: center each bootstrap difference on the observed difference, find the largest cluster mass in each of 1,000 resamples, and compare every observed cluster with that maximum-mass distribution.
 - Multiple comparisons: using the largest null cluster in each resample controls the family-wise error rate over the full time axis within each recording.
 - Cluster `p` value: `(1 + number of null maximum cluster masses at least as large as the observed mass) / 1,001`. The smallest attainable value is `1/1,001 = 0.000999`.
-- Decision rule: draw a black bar and `***` for corrected cluster `p <= 0.001`; when no cluster meets that threshold, draw a full-width black bar labeled `NS`.
+- Decision rule: draw a black bar and `p < 0.001` for corrected cluster `p <= 0.001`; when no cluster meets that threshold, draw a full-width black bar labeled `N.S`.
 - Confidence intervals: pointwise 95% percentile intervals from the 1,000 paired connected-structure bootstrap samples.
 - Scope: the uncertainty and test describe variation across segmented structures within each single field of view. They are not biological-replicate confidence intervals or population-level evidence.
 
 ## Legends
 
 - X axis: time after the first stored timepoint in minutes.
-- Y axis: motor fluorescence normalized to the first-five-minute regional baseline, `F/F0`.
+- Y axis: motor fluorescence normalized to the first-five-minute regional baseline, `F/F0`; the shared display range ends at 2.7 to leave clear space above the annotations.
 - Color/value: OFF-to-ON uses dark red (`#991B1B`) for rail and light red (`#E8A6A6`) for off rail. ON-to-OFF uses dark green (`#166534`) for rail and light green (`#86C995`) for off rail.
 - Grouping: each panel has a two-entry legend containing only `Rail` and `Off rail`; color darkness identifies the region.
 - Ordering/sorting: timepoints remain in acquisition order.
-- Lines/markers/labels: solid lines show the 30-second rolling means and translucent bands show pointwise 95% bootstrap confidence intervals. Below each legend, a black bar is labeled `***` for corrected cluster `p <= 0.001` or `NS` when no cluster meets that threshold. There are no baseline reference lines.
+- Lines/markers/labels: solid lines show the 30-second rolling means and translucent bands show pointwise 95% bootstrap confidence intervals. A black bar is labeled `p < 0.001` for the corrected OFF-to-ON cluster or with a small `N.S` when no cluster meets the display threshold. Annotation heights are set independently so the ON-to-OFF bar sits just above its confidence bands while both legends remain clearly separated above. There are no baseline reference lines.
 - Panels: one row by two columns; OFF-to-ON is left and ON-to-OFF is right. The y axis is shared.
 
 ## Interpretation
@@ -71,8 +71,8 @@
 - The OFF-to-ON rail trace rises to about 1.8 times its first-five-minute baseline, whereas its off-rail trace reaches about 1.1. The much larger rail-region change is the visually dominant result.
 - The ON-to-OFF rail and off-rail traces both remain close to their own baselines. Their last-five-minute means are approximately 1.02 and 0.99, respectively, so this recording does not show a comparable sustained regional change.
 - The separation between the OFF-to-ON rail and off-rail traces indicates that the large motor-fluorescence increase is concentrated in the DNA-defined rail region rather than shared equally by nearby non-rail pixels.
-- OFF-to-ON has one corrected temporal cluster from 5.43 to 76.14 minutes with `p = 0.000999`, displayed as `***`.
-- ON-to-OFF has no temporal cluster meeting the `p <= 0.001` display threshold and is labeled `NS`.
+- OFF-to-ON has one corrected temporal cluster from 5.43 to 76.14 minutes with `p = 0.000999`, displayed as `p < 0.001`.
+- ON-to-OFF has no temporal cluster meeting the `p <= 0.001` display threshold and is labeled `N.S`.
 - These traces describe two individual recordings. The within-recording cluster test does not establish population-level reproducibility, biological-replicate significance, or molecular binding below optical resolution.
 
 ## Notes
