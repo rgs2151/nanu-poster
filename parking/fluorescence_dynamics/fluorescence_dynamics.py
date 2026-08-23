@@ -23,6 +23,14 @@ OFF_RAIL_INNER_RADIUS = 4
 OFF_RAIL_OUTER_RADIUS = 10
 BASELINE_MINUTES = 5.0
 OFF_TO_ON_FRAME_INTERVAL_SECONDS = 2.188
+ROLLING_WINDOW_SECONDS = 30.0
+
+COLORS = {
+    "off_to_on_rail": "#991B1B",
+    "off_to_on_off_rail": "#E8A6A6",
+    "on_to_off_rail": "#166534",
+    "on_to_off_off_rail": "#86C995",
+}
 
 
 def segment_rails(rail_stack):
@@ -250,36 +258,60 @@ def setup_style():
     plt.rcParams["savefig.transparent"] = False
 
 
+def centered_rolling_mean(time_min, values):
+    half_window_min = ROLLING_WINDOW_SECONDS / 120.0
+    left = np.searchsorted(time_min, time_min - half_window_min, side="left")
+    right = np.searchsorted(time_min, time_min + half_window_min, side="right")
+    cumulative = np.concatenate([[0.0], np.cumsum(values, dtype=float)])
+    return (cumulative[right] - cumulative[left]) / (right - left)
+
+
 def plot_fluorescence_dynamics(cache):
     setup_style()
     fig, ax = plt.subplots(figsize=(4.2, 3.5))
 
     lines = [
-        ("on_to_off", "rail_ff0", "ON-to-OFF rail", "darkred", "-"),
-        ("on_to_off", "off_rail_ff0", "ON-to-OFF off rail", "darkred", "--"),
-        ("off_to_on", "rail_ff0", "OFF-to-ON rail", "midnightblue", "-"),
+        (
+            "off_to_on",
+            "rail_ff0",
+            "OFF-to-ON rail",
+            COLORS["off_to_on_rail"],
+        ),
         (
             "off_to_on",
             "off_rail_ff0",
             "OFF-to-ON off rail",
-            "midnightblue",
-            "--",
+            COLORS["off_to_on_off_rail"],
+        ),
+        (
+            "on_to_off",
+            "rail_ff0",
+            "ON-to-OFF rail",
+            COLORS["on_to_off_rail"],
+        ),
+        (
+            "on_to_off",
+            "off_rail_ff0",
+            "ON-to-OFF off rail",
+            COLORS["on_to_off_off_rail"],
         ),
     ]
     plotted_values = []
-    for recording, signal, label, color, linestyle in lines:
+    for recording, signal, label, color in lines:
         time_min = cache[f"{recording}_time_min"]
-        values = cache[f"{recording}_{signal}"]
+        values = centered_rolling_mean(
+            time_min,
+            cache[f"{recording}_{signal}"],
+        )
         plotted_values.append(values)
         ax.plot(
             time_min,
             values,
             color=color,
-            linestyle=linestyle,
+            linestyle="-",
             label=label,
         )
 
-    ax.axhline(1.0, color="black", linestyle=":", linewidth=0.8)
     ax.set_xlabel("Time (min)")
     ax.set_ylabel(r"$F/F_0$")
 
@@ -290,7 +322,7 @@ def plot_fluorescence_dynamics(cache):
     ax.set_xlim(0, xmax)
     ax.set_xticks([0, xmax])
 
-    all_values = np.concatenate(plotted_values + [np.asarray([1.0])])
+    all_values = np.concatenate(plotted_values)
     value_min = float(np.nanmin(all_values))
     value_max = float(np.nanmax(all_values))
     padding = 0.05 * (value_max - value_min)

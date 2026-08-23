@@ -12,7 +12,7 @@
 - Define the off-rail comparison region as the band beginning four pixels and ending ten pixels outside the expanded rail region. Freeze both regions for the full recording; motor brightness does not define or move them.
 - At each timepoint, calculate the mean raw motor-channel intensity separately across all rail pixels and all off-rail pixels. Do not subtract one region from the other.
 - Define `F0` separately for every recording-region pair as its mean intensity during the first five minutes, then divide that pair's full intensity trace by its own `F0`.
-- Keep every timepoint in acquisition order and do not smooth or temporally bin the traces.
+- Keep every timepoint in acquisition order and apply a centered 30-second rolling mean to each normalized trace for display. At each plotted timepoint, average the observations within 15 seconds before and after it; use the available observations at the recording edges.
 - Plot the four normalized traces together in `plots/fluorescence_dynamics.pdf`.
 
 ## Variables
@@ -25,6 +25,7 @@
 - Motor fluorescence `F(t)`: mean raw motor-channel detector intensity within one fixed region at time `t`.
 - Baseline `F0`: mean regional motor intensity over timepoints at or before five minutes, calculated separately for all four traces.
 - Normalized fluorescence: `F(t) / F0`.
+- Display smoothing: centered 30-second rolling mean applied separately to each normalized trace.
 - Time: exact embedded elapsed time for ON-to-OFF; timepoint index multiplied by 2.188 seconds for OFF-to-ON.
 - Detector diagnostic: the fraction of pixels in each region equal to the 16-bit maximum of 65,535 at every timepoint.
 - Cache: `cache/fluorescence_dynamics.npz`, containing fixed masks, rail references, processed references, thresholds, reference-frame indices, time axes, raw regional means, `F0` values, normalized traces, saturation fractions, and all fixed analysis parameters.
@@ -33,7 +34,7 @@
 ## Statistics
 
 - None; this output is descriptive.
-- Descriptive summaries: mean regional motor intensity at every timepoint, the first-five-minute mean `F0`, and the normalized ratio `F/F0`.
+- Descriptive summaries: mean regional motor intensity at every timepoint, the first-five-minute mean `F0`, the normalized ratio `F/F0`, and a centered 30-second rolling mean for display.
 - Directional hypothesis for ON-to-OFF: rail motor `F/F0` decreases over time.
 - Directional hypothesis for OFF-to-ON: rail motor `F/F0` increases over time.
 - No null distribution, inferential threshold, model, confidence interval, or statistical test is used at this stage.
@@ -43,10 +44,10 @@
 
 - X axis: time after the first stored timepoint in minutes.
 - Y axis: motor fluorescence normalized to the first-five-minute regional baseline, `F/F0`.
-- Color/value: dark red identifies the ON-to-OFF recording; midnight blue identifies the OFF-to-ON recording.
-- Grouping: solid lines show rail regions and dashed lines show off-rail regions.
+- Color/value: OFF-to-ON is a red family, with dark red (`#991B1B`) for rail and light red (`#E8A6A6`) for off rail. ON-to-OFF is a green family, with dark green (`#166534`) for rail and light green (`#86C995`) for off rail.
+- Grouping: color family identifies the transition and color darkness identifies rail versus off rail.
 - Ordering/sorting: timepoints remain in acquisition order.
-- Lines/markers/labels: four thin lines without markers; a black dotted horizontal reference marks `F/F0 = 1`; the legend is frameless.
+- Lines/markers/labels: four solid lines without markers or horizontal reference lines; the legend is frameless.
 - Panels: one panel containing all four time courses and no title.
 
 ## Interpretation
@@ -60,7 +61,7 @@
 
 - The cache is reused whenever present so plotting and documentation changes do not reread or resegment the TIFF stacks. Delete the cache only when an explicit recomputation is required.
 - Raw regional means are cached as well as normalized traces, so a later normalization change can be calculated without rereading the source TIFFs.
-- No temporal smoothing, background subtraction, null distribution, or statistical trend calculation is applied.
+- The plotted lines use a centered 30-second rolling mean. Unsmoothed normalized traces and raw regional means remain in the cache; no background subtraction, null distribution, or statistical trend calculation is applied.
 - The ON-to-OFF `F0` values are 639.4 detector units on rail and 555.9 off rail. The OFF-to-ON values are 16,794.4 on rail and 15,299.9 off rail.
 - Saturated motor pixels are retained in the regional means, and their fractions are cached. No ON-to-OFF pixels in either region are saturated. In OFF-to-ON, the rail-region saturated fraction reaches 9.2% and averages 4.0%; because clipped values are lower bounds on the underlying signal, the measured rail increase is conservative at affected timepoints.
 - The completed `parking/vis` unit remains frozen.
