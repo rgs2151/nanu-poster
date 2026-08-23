@@ -74,19 +74,13 @@ def plot_motor_frame(ax, motor_frame, rail_mask, threshold, color, label, limits
     ax.set_axis_off()
 
 
-def plot_time_course(ax, time_min, raw_fraction, smoothed_fraction, color):
-    ax.plot(
-        time_min,
-        raw_fraction,
-        color=color,
-        alpha=0.22,
-        linewidth=0.6,
-    )
+def plot_time_course(ax, time_min, smoothed_fraction, color):
     ax.plot(
         time_min,
         smoothed_fraction,
         color=color,
         linewidth=1.4,
+        label="30-second average",
     )
     xmax = float(time_min[-1])
     ax.set_xlim(0, xmax)
@@ -94,7 +88,13 @@ def plot_time_course(ax, time_min, raw_fraction, smoothed_fraction, color):
     ax.set_ylim(-2.5, 52.5)
     ax.set_yticks([0, 50])
     ax.set_xlabel("Time (min)", fontsize=9)
-    ax.set_ylabel("Rail fraction (%)", fontsize=9)
+    ax.set_ylabel("Fraction (%)", fontsize=9)
+    ax.set_title(
+        "Proportion of rail lit up\nby motor protein",
+        fontsize=8.5,
+        pad=7,
+    )
+    ax.legend(loc="upper left", fontsize=7, frameon=False)
     ax.tick_params(labelsize=8)
     ax.set_box_aspect(1)
     sns.despine(ax=ax, trim=True, offset=7)
@@ -172,7 +172,6 @@ def plot_composite(source_cache, cache):
         plot_time_course(
             axes[row, 3],
             time_min,
-            cache[f"{recording}_fraction_percent"],
             cache[f"{recording}_fraction_smoothed"],
             color,
         )

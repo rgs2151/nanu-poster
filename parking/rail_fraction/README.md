@@ -84,7 +84,7 @@
 - Select an early timepoint nearest 2.5 minutes and a late timepoint nearest 2.5 minutes before the recording ends, using the same rule independently for both recordings.
 - On each selected raw motor frame, color every pixel that lies inside the approved expanded rail mask and exceeds the fixed threshold. These colored pixels are the exact numerator of the displayed percentage.
 - Draw hollow black circles around at most the 20 largest contiguous positive regions containing at least four pixels. The circles are visual guides only; they do not add, remove, merge, or filter counted pixels.
-- Append the corresponding raw and centered 30-second rail-fraction time course to the right of each row.
+- Append the corresponding centered 30-second rail-fraction time course to the right of each row.
 - Write the two-row, four-column composite to `plots/rail_fraction_composite.pdf`.
 
 ## Variables
@@ -96,13 +96,13 @@
 - ON-to-OFF fixed motor-positive threshold: 793 detector units.
 - Positive-pixel overlay: all lit rail pixels satisfying `rail mask AND motor intensity > threshold`.
 - Circle guides: up to 20 largest eight-connected positive regions, each at least four pixels in area.
-- Time-course y variable: `Rail fraction (%)`, the percentage of detected rail area lit above the fixed threshold.
+- Time-course y variable: `Fraction (%)`, the percentage of detected rail area lit above the fixed threshold.
 - Output: `plots/rail_fraction_composite.pdf`.
 
 ## Statistics
 
 - None; this output is descriptive.
-- Descriptive summaries: the exact rail fraction in each selected frame and the full raw and centered 30-second time courses.
+- Descriptive summaries: the exact rail fraction in each selected frame and the centered 30-second time course.
 - Null hypothesis: not tested.
 - Alternative hypothesis: not tested.
 - Decision rule: the same fixed intensity threshold used by the full time course determines every colored pixel. Circle size and component ranking do not affect the measurement.
@@ -111,11 +111,11 @@
 ## Legends
 
 - X axis: time after the first stored timepoint in minutes for the line plots; image x-coordinate is hidden in the image panels.
-- Y axis: `Rail fraction (%)` for the line plots; image y-coordinate is hidden in the image panels.
+- Y axis: `Fraction (%)` for the line plots; image y-coordinate is hidden in the image panels.
 - Color/value: grayscale shows recorded fluorescence; red outlines, overlays, and lines identify OFF-to-ON; green identifies ON-to-OFF.
 - Grouping: OFF-to-ON occupies the top row and ON-to-OFF the bottom row.
 - Ordering/sorting: each row shows rail segmentation, early motor frame, late motor frame, and rail-fraction time course from left to right.
-- Lines/markers/labels: colored pixels are the exact fraction numerator; hollow black circles point to the largest contiguous positive regions; early and late percentages are rounded to whole numbers; a translucent line shows raw fractions and a dark line shows the centered 30-second mean. No explanatory footer or line legend is shown.
+- Lines/markers/labels: colored pixels are the exact fraction numerator; hollow black circles point to the largest contiguous positive regions; early and late percentages are rounded to whole numbers. Each line panel contains only the centered 30-second average, labeled `30-second average` in its legend, and is titled `Proportion of rail lit up by motor protein`. No raw trace or explanatory footer is shown.
 - Panels: two rows by four columns.
 
 ## Interpretation
